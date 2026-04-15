@@ -23,7 +23,7 @@ def get_official_terms():
 
 # --- 3. 웹 화면 구성 ---
 st.set_page_config(page_title="뮤 온라인 조수", page_icon="🚀")
-st.title("🚀 뮤 온라인 현지화 AI 조수")
+st.title("🚀 뮤 온라인 조수")
 
 if 'mu_data' not in st.session_state:
     st.session_state['mu_data'] = "버지드래곤, 로랜시아, 축복의 보석, 흑기사, 날개"
@@ -39,7 +39,7 @@ user_input = st.text_input("질문을 입력하세요")
 if user_input:
     try:
         # [수정] 무료 한도가 가장 넉넉한 1.5-flash 모델로 이름을 정확히 고정합니다.
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('models/gemini-1.5-flash')
         
         prompt = f"""
         너는 뮤 온라인 전문 번역가야. 아래 데이터를 참고해서 답해줘.

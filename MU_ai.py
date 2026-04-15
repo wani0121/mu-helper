@@ -24,8 +24,8 @@ def get_official_terms():
         return "기본 데이터: 버지드래곤, 로랜시아, 축복의 보석"
 
 # --- 3. 웹 화면 구성 ---
-st.set_page_config(page_title="뮤 온라인 현지화 조수", page_icon="🐲")
-st.title("🐲 뮤 온라인 현지화 AI 조수")
+st.set_page_config(page_title="뮤 온라인 조수", page_icon="🐲")
+st.title("🐲 뮤 온라인 현지화 조수")
 
 if 'mu_data' not in st.session_state:
     st.session_state['mu_data'] = "버지드래곤, 로랜시아, 축복의 보석, 흑기사, 날개"
@@ -36,7 +36,7 @@ if st.button('🌐 공식 홈페이지 데이터 동기화'):
         st.success('동기화 완료!')
 
 # --- 4. 질문 처리 ---
-user_input = st.text_input("질문을 입력하세요 (예: 'Lorencia'를 한국어로 뭐야?)")
+user_input = st.text_input("질문을 입력하세요 (예: '버지드래곤'에 대해서 알려줘)")
 
 if user_input:
     try:

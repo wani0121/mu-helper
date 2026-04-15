@@ -22,7 +22,7 @@ def get_official_terms():
         return "기본 데이터: 버지드래곤, 로랜시아, 축복의 보석"
 
 # --- 3. 웹 화면 구성 ---
-st.set_page_config(page_title="뮤 온라인 현지화 조수", page_icon="🚀")
+st.set_page_config(page_title="뮤 온라인 조수", page_icon="🚀")
 st.title("🚀 뮤 온라인 현지화 AI 조수")
 
 if 'mu_data' not in st.session_state:

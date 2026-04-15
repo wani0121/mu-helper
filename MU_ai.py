@@ -4,82 +4,61 @@ import requests
 from bs4 import BeautifulSoup
 
 # --- 1. 설정 및 API 키 ---
-# 이 키는 담당자님의 소중한 열쇠입니다!
-# 직접 키를 적지 않고, 스트림릿의 'Secrets'라는 비밀 금고에서 가져오게 만듭니다.
+# Streamlit Secrets에서 키를 가져옵니다. (GitHub에는 노출 안 됨)
 MY_API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=MY_API_KEY)
 
-# --- 2. [자동 수집 함수] 홈페이지에서 용어 긁어오기 ---
+# --- 2. 공식 홈페이지 데이터 수집 (기존과 동일) ---
 def get_official_terms():
     url = "https://muonline.webzen.co.kr/game-info/guide/library"
     try:
         response = requests.get(url, timeout=5)
         soup = BeautifulSoup(response.text, 'html.parser')
-        # 홈페이지의 가이드 리스트 제목(.tit)을 찾아옵니다.
         terms = soup.select('.tit') 
-        
         if not terms:
-            return "버지드래곤, 로랜시아, 축복의 보석, 흑기사, 날개, 웹젠, 뮤온라인"
-            
-        collected = ""
-        for term in terms:
-            collected += f"용어: {term.text.strip()}\n"
-        return collected
+            return "버지드래곤, 로랜시아, 축복의 보석, 흑기사, 날개"
+        return "\n".join([f"용어: {t.text.strip()}" for t in terms])
     except:
-        return "기본 데이터: 버지드래곤, 로랜시아, 축복의 보석, 흑기사, 날개"
+        return "기본 데이터: 버지드래곤, 로랜시아, 축복의 보석"
 
 # --- 3. 웹 화면 구성 ---
-st.set_page_config(page_title="뮤 온라인 현지화 조수", page_icon="⚔️")
-st.title("🐲 뮤 온라인 현지화 AI 조수")
-st.markdown("---")
+st.set_page_config(page_title="뮤 온라인 현지화 조수", page_icon="🚀")
+st.title("🚀 뮤 온라인 현지화 AI 조수")
 
-# 데이터 관리용 저장소 (세션 스테이트)
 if 'mu_data' not in st.session_state:
-    st.session_state['mu_data'] = "버지드래곤, 로랜시아, 축복의 보석, 흑기사, 날개, 웹젠"
+    st.session_state['mu_data'] = "버지드래곤, 로랜시아, 축복의 보석, 흑기사, 날개"
 
-# 버튼을 누르면 홈페이지 데이터를 긁어와서 업데이트합니다.
 if st.button('🌐 공식 홈페이지 데이터 동기화'):
-    with st.spinner('공식 홈페이지에서 최신 용어를 수집 중입니다...'):
+    with st.spinner('수집 중...'):
         st.session_state['mu_data'] = get_official_terms()
-        st.success('데이터 동기화 완료!')
+        st.success('완료!')
 
-# --- 4. 사용자 질문 입력창 ---
-user_input = st.text_input("질문을 입력하세요", placeholder="예: 버지드래곤에 대해 설명해줘")
+# --- 4. 질문 처리 ---
+user_input = st.text_input("질문을 입력하세요")
 
 if user_input:
     try:
-        # [핵심] 에러가 났던 모델 연결 부분을 자동으로 수정하는 로직
-        model_list = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        # gemini-1.5-flash가 있으면 쓰고, 없으면 리스트의 첫 번째 모델을 사용
-        target_model = 'models/gemini-1.5-flash' if 'models/gemini-1.5-flash' in model_list else model_list[0]
+        # [수정] 무료 한도가 가장 넉넉한 1.5-flash 모델로 이름을 정확히 고정합니다.
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
-        model = genai.GenerativeModel(target_model)
-        
-        # AI에게 정체성을 부여하는 지침
         prompt = f"""
-        너는 웹젠의 '뮤 온라인(奇迹MU)' 전문 현지화 번역가이자 가이드야.
-        
-        [규칙]
-        1. '뮤 온라인'이나 '웹젠'과 상관없는 질문(예: 음식, 날씨, 다른 게임)은 무조건 거절해.
-        2. 거절할 때는 "죄송합니다. 저는 뮤 온라인 현지화 관련 답변만 드릴 수 있습니다."라고 말해.
-        3. 아래의 [참고 데이터]에 있는 내용을 우선적으로 활용해서 대답해줘.
-        
-        [참고 데이터]:
-        {st.session_state['mu_data']}
-        
-        사용자 질문: "{user_input}"
+        너는 뮤 온라인 전문 번역가야. 아래 데이터를 참고해서 답해줘.
+        데이터: {st.session_state['mu_data']}
+        질문: {user_input}
         """
         
         response = model.generate_content(prompt)
-        
-        st.markdown("---")
-        st.subheader("💡 AI 번역가의 답변")
-        st.write(response.text)
+        st.info(response.text)
         
     except Exception as e:
-        st.error(f"오류가 발생했습니다: {e}")
-        st.info("API 키 설정이나 모델 연결 상태를 확인해 주세요.")
+        # 과금/한도 에러(429) 발생 시 알기 쉽게 안내
+        if "429" in str(e):
+            st.error("⚠️ 무료 사용량이 일시적으로 소진되었습니다. 1분만 기다렸다가 다시 시도해 주세요!")
+        else:
+            st.error(f"오류가 발생했습니다: {e}")
 
+with st.sidebar:
+    st.write("학습 데이터:", st.session_state['mu_data'])
 # 사이드바 (현재 어떤 데이터를 가지고 있는지 확인용)
 with st.sidebar:
     st.header("📊 현재 학습 데이터")

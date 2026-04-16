@@ -22,8 +22,9 @@ def get_official_terms():
         return "데이터 수집 실패"
 
 # --- 3. 페이지 설정 ---
-st.set_page_config(page_title="뮤 온라인 ai 흑기사", page_icon="🔍")
-st.title("🔍 뮤 온라인 ai 흑기사")
+# 브라우저 탭 제목과 메인 화면 제목을 수정했습니다.
+st.set_page_config(page_title="뮤온라인 ai 흑기사", page_icon="🔍")
+st.title("🔍 뮤온라인 ai 흑기사")
 
 # 대화 내역 저장 공간
 if "messages" not in st.session_state:
@@ -75,7 +76,7 @@ if prompt := st.chat_input("질문을 입력하세요..."):
         except Exception as e:
             error_msg = str(e).lower()
             
-            # 에러 메시지에 따라 알림 구분
+            # 에러 메시지에 따라 알림 구분 (분당 제한 vs 일일 제한)
             if "429" in error_msg:
                 if "daily" in error_msg or "quota" in error_msg:
                     st.error("⚠️ 오늘 사용량이 모두 소진되었습니다. 내일 다시 시도해주세요.")
@@ -89,6 +90,8 @@ if prompt := st.chat_input("질문을 입력하세요..."):
 # 사이드바 설정
 with st.sidebar:
     st.header("⚙️ 관리 메뉴")
+    st.subheader("뮤온라인 ai 흑기사") # 사이드바 서브제목 추가
+    
     if st.button('🌐 데이터 동기화'):
         with st.spinner('수집 중...'):
             st.session_state['mu_data'] = get_official_terms()

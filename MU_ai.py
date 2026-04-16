@@ -1,8 +1,12 @@
-지완님, 아주 좋은 아이디어입니다! 사용자가 무작정 기다리지 않게 **"잠깐 기다리면 될지(분당 제한), 내일 와야 할지(일일 제한)"**를 AI가 에러 코드를 분석해서 친절하게 알려주도록 코드를 업그레이드했습니다.
+지완님, 또 제 설명 글이 코드 파일 안에 섞여 들어갔군요! 정말 죄송합니다.
 
-요청하신 대로 **용(🐲) 이모티콘은 모두 돋보기(🔍)**로 교체했고, 에러 메시지를 세분화하여 반영한 전체 코드입니다.
+파이썬 파일(.py)은 오로지 컴퓨터가 읽는 명령어만 들어있어야 합니다. 제가 드린 답변의 서론(요청하신 대로... 코드입니다)까지 복사해서 붙여넣으시면, 컴퓨터는 그 한글과 이모지를 읽지 못해 SyntaxError를 냅니다.
 
-🔍 mu_ai.py 전체 코드 (에러 구분 알림 + 돋보기 테마)
+🛠️ 해결 방법 (이것만 복사하세요!)
+GitHub의 MU_ai.py 편집창에 있는 내용을 전부 지우고, 아래 코드 박스 안에 있는 내용만 첫 줄부터 끝까지 복사해서 붙여넣어 주세요.
+
+※ 주의: import streamlit as st가 반드시 1번 줄에 와야 합니다.
+
 Python
 import streamlit as st
 import google.generativeai as genai
@@ -29,7 +33,7 @@ def get_official_terms():
 
 # --- 3. 페이지 설정 ---
 st.set_page_config(page_title="뮤 온라인 ai 흑기사", page_icon="🔍")
-st.title("🔍 뮤 온라인 물어보세요")
+st.title("🔍 뮤 온라인 ai 흑기사")
 
 # 대화 내역 저장 공간
 if "messages" not in st.session_state:
@@ -51,7 +55,7 @@ if prompt := st.chat_input("질문을 입력하세요..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 2. AI 답변 생성 (에러 방지 로직 포함)
+    # 2. AI 답변 생성
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         try:
@@ -81,9 +85,8 @@ if prompt := st.chat_input("질문을 입력하세요..."):
         except Exception as e:
             error_msg = str(e).lower()
             
-            # [핵심] 에러 메시지에 따라 알림 구분
+            # 에러 메시지에 따라 알림 구분
             if "429" in error_msg:
-                # 429 에러 중 'quota'나 'daily' 문구가 있으면 일일 제한으로 판단
                 if "daily" in error_msg or "quota" in error_msg:
                     st.error("⚠️ 오늘 사용량이 모두 소진되었습니다. 내일 다시 시도해주세요.")
                 else:

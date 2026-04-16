@@ -22,8 +22,8 @@ def get_official_terms():
         return "데이터 수집 실패"
 
 # --- 3. 페이지 설정 ---
-st.set_page_config(page_title="뮤 온라인 현지화 조수", page_icon="🐲")
-st.title("🐲 뮤 온라인 현지화 조수: 흑기사")
+st.set_page_config(page_title="뮤 온라인 현지화 조수", page_icon="🔍")
+st.title("🔍 뮤 온라인:ai흑기사")
 
 # [중요] 대화 내역을 저장할 공간 만들기
 if "messages" not in st.session_state:

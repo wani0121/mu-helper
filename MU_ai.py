@@ -1,96 +1,98 @@
 import streamlit as st
+import google.generativeai as genai
 import requests
 from datetime import datetime
 
-# --- 1. 설정 및 API 키 (변수명 통일) ---
-# Streamlit Secrets에 OPENWEATHER_API_KEY로 저장되어 있어야 합니다.
-if "OPENWEATHER_API_KEY" in st.secrets:
-    API_KEY = st.secrets["OPENWEATHER_API_KEY"]
-else:
-    API_KEY = None
-    st.warning("⚠️ API 키가 설정되지 않았습니다. 사이드바나 Secrets 설정을 확인해주세요.")
+# --- 1. 설정 및 Gemini 연결 ---
+try:
+    # 지완님이 이미 설정해두신 GEMINI_API_KEY를 그대로 사용합니다.
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+except Exception as e:
+    st.error("Secrets에 'GEMINI_API_KEY'가 설정되어 있는지 확인해주세요.")
 
-# --- 2. 데이터 수집 함수 (OpenWeatherMap 오픈 소스 활용) ---
-def get_weather_api(city_name):
-    if not API_KEY:
-        return "서비스 준비 중입니다. API 키 설정을 확인해주세요."
-
+# --- 2. 날씨 데이터 수집 함수 (무료 오픈소스 wttr.in 활용) ---
+def get_raw_weather(city_name):
     try:
-        # 1. 도시 이름 정리 (한글 -> 영문 변환)
-        city_map = {
-            "성남": "Seongnam", "판교": "Seongnam", "서울": "Seoul", 
-            "부산": "Busan", "인천": "Incheon", "대구": "Daegu"
-        }
-        # 사용자가 '성남 날씨'라고 입력해도 '성남'만 추출
+        # 영문 도시명 매핑 (데이터 정확도를 위해)
+        city_map = {"성남": "Seongnam", "판교": "Pangyo", "서울": "Seoul", "분당": "Bundang"}
         clean_name = city_name.replace("날씨", "").replace("미세먼지", "").strip()
-        eng_city = city_map.get(clean_name, clean_name)
+        eng_city = city_map.get(clean_query := clean_name, clean_name)
 
-        # 2. 실시간 날씨 호출 (OpenWeatherMap API)
-        url = f"https://api.openweathermap.org/data/2.5/weather?q={eng_city}&appid={API_KEY}&units=metric&lang=kr"
-        res = requests.get(url, timeout=5)
-        data = res.json()
+        # 날씨와 공기질 데이터를 JSON으로 가져옵니다.
+        url = f"https://wttr.in/{eng_city}?format=j1"
+        res = requests.get(url, timeout=10)
+        return res.json(), clean_query
+    except:
+        return None, city_name
 
-        if data.get("cod") != 200:
-            return f"'{city_name}' 지역을 찾을 수 없습니다. (영문명: {eng_city})"
-
-        # 3. 데이터 파싱
-        temp = data['main']['temp']
-        desc = data['weather'][0]['description']
-        humidity = data['main']['humidity']
-        wind = data['wind']['speed']
-
-        # 4. 옷차림 추천 로직 (기온 기반)
-        if temp >= 28: outfit = "매우 더워요! 반팔, 반바지, 린넨 소재가 필수입니다. ☀️"
-        elif temp >= 20: outfit = "가벼운 가디건이나 긴팔 티셔츠를 추천드려요. 👕"
-        elif temp >= 12: outfit = "자켓, 트렌치코트나 야상을 입기 좋은 날씨예요. 🧥"
-        elif temp >= 5: outfit = "코트나 두꺼운 외투, 경량 패딩을 입으세요. 🧣"
-        else: outfit = "많이 춥습니다! 패딩과 목도리로 무장하세요! ❄️"
-
-        # 답변 구성
-        report = f"""
-안녕하세요! AI 기상캐스터입니다. 🎤
-오픈 소스 데이터를 기반으로 분석한 **{clean_name}** 지역 날씨입니다!
-
-🌡️ **현재 기온:** {temp}°C ({desc})
-💨 **풍속/습도:** {wind}m/s / {humidity}%
-
-👗 **오늘의 코디 추천:**
-{outfit}
-
-📅 **단기 안내:**
-- 현재 외부 상태는 '{desc}'입니다.
-- 일교차에 주의하시고 행복한 하루 보내세요! 🍀
-        """
-        return report
-
-    except Exception as e:
-        return f"데이터를 가져오는 중 오류가 발생했습니다. (사유: {str(e)})"
-
-# --- 3. 채팅 UI 설정 ---
+# --- 3. 페이지 설정 ---
 st.set_page_config(page_title="AI 기상캐스터", page_icon="🌤️")
 st.title("🌤️ AI 기상캐스터")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# --- 4. 채팅 화면 표시 ---
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("지역을 입력하세요 (예: 성남, 서울 날씨)"):
+# --- 5. 대화 로직 ---
+if prompt := st.chat_input("지역명을 입력하세요 (예: 성남 날씨, 판교 미세먼지)"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner('실시간 기상 정보를 불러오는 중...'):
-            answer = get_weather_api(prompt)
-            st.markdown(answer)
-            st.session_state.messages.append({"role": "assistant", "content": answer})
+        message_placeholder = st.empty()
+        
+        # 1. 날씨 데이터 가져오기
+        raw_data, target_city = get_raw_weather(prompt)
+        
+        if raw_data:
+            current = raw_data['current_condition'][0]
+            # AI에게 줄 요약 데이터 생성
+            weather_context = {
+                "지역": target_city,
+                "온도": current['temp_C'],
+                "상태": current['weatherDesc'][0]['value'],
+                "습도": current['humidity'],
+                "가시거리(미세먼지판단)": current['visibility'],
+                "예보": [f"{w['date']}: {w['mintemp_C']}~{w['maxtemp_C']}도" for w in raw_data['weather'][:3]]
+            }
+        else:
+            weather_context = "날씨 데이터를 불러오지 못했습니다. 일반적인 지식으로 답해주세요."
+
+        # 2. Gemini AI에게 브리핑 요청
+        try:
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            full_prompt = f"""
+            너는 전문 'AI 기상캐스터'야. 아래 데이터를 바탕으로 기상 브리핑을 해줘.
+            
+            [기상 데이터]: {weather_context}
+            
+            [지침]
+            1. 말투: 생동감 있고 친절한 기상캐스터 말투 (이모티콘 ☀️☁️ 적극 사용).
+            2. 구성: 현재 기온/상태 -> 미세먼지(가시거리 기반으로 유추) -> 3일 예보 -> 옷차림 추천 순서.
+            3. 옷차림 추천: 기온에 맞춰서 아주 구체적으로(예: 가디건, 얇은 니트 등) 추천해줘.
+            4. 사용자가 '판교 미세먼지'처럼 물으면 그 부분에 집중해서 답해줘.
+            
+            [사용자 질문]: {prompt}
+            """
+            
+            response = model.generate_content(full_prompt)
+            ai_answer = response.text
+            
+            message_placeholder.markdown(ai_answer)
+            st.session_state.messages.append({"role": "assistant", "content": ai_answer})
+            
+        except Exception as e:
+            st.error(f"AI 답변 생성 중 오류가 발생했습니다: {str(e)}")
 
 # 사이드바
 with st.sidebar:
-    st.header("⚙️ 관리 메뉴")
+    st.header("⚙️ 서비스 상태")
+    st.success("Gemini 1.5 Flash 엔진 가동 중")
     if st.button('🗑️ 대화 기록 삭제'):
         st.session_state.messages = []
         st.rerun()

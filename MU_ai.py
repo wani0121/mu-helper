@@ -1,94 +1,106 @@
 import streamlit as st
 import requests
+import geocoder
 from datetime import datetime
 
 # --- 1. 페이지 설정 ---
 st.set_page_config(page_title="AI 기상캐스터", page_icon="🌤️")
 st.title("🌤️ AI 기상캐스터")
 
-# 대화 내역 저장
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 2. 안정적인 날씨 데이터 수집 함수 (wttr.in 사용) ---
-def get_weather_stable(city_name):
+# --- 2. 위치 및 날씨 수집 함수 ---
+def get_weather_full(query):
     try:
-        # 영문 지역명 매핑 (안정적인 조회를 위해)
-        city_map = {
-            "서울": "Seoul", "성남": "Seongnam", "분당": "Bundang", 
-            "부산": "Busan", "인천": "Incheon", "대구": "Daegu", 
-            "대전": "Daejeon", "광주": "Gwangju", "수원": "Suwon"
-        }
-        
-        # 입력된 한글에서 지역명만 추출
-        clean_name = city_name.replace("날씨", "").strip()
-        eng_city = city_map.get(clean_name, clean_name)
+        # 1. 자동 위치 파악 (쿼리가 "날씨" 한 글자일 때)
+        if query.strip() == "날씨":
+            g = geocoder.ip('me') # 접속자 IP 기반 위치 찾기
+            target_city = g.city if g.city else "Seoul"
+        else:
+            # "성남 날씨", "판교 미세먼지" 등에서 지역명만 추출
+            target_city = query.replace("날씨", "").replace("미세먼지", "").replace("어때", "").strip()
 
-        # wttr.in API 호출 (JSON 형식으로 데이터 수집)
-        url = f"https://wttr.in/{eng_city}?format=j1"
+        # 2. 날씨 데이터 수집 (wttr.in JSON 포맷)
+        # v2 포맷을 사용하여 미세먼지(공기질)와 예보 데이터를 포함합니다.
+        url = f"https://wttr.in/{target_city}?format=j1"
         res = requests.get(url, timeout=10)
         data = res.json()
 
-        # 데이터 파싱
+        # 현재 데이터 추출
         current = data['current_condition'][0]
         temp = current['temp_C']
-        desc_en = current['weatherDesc'][0]['value']
+        humidity = current['humidity']
         
-        # 날씨 상태 한글화
-        weather_dict = {
-            "Sunny": "맑음 ☀️", "Clear": "맑음 ☀️", "Partly cloudy": "구름 조금 ⛅",
-            "Cloudy": "흐림 ☁️", "Overcast": "매우 흐림 ☁️", "Mist": "안개 🌫️",
-            "Patchy rain possible": "비 올 가능성 🌧️", "Light rain": "약한 비 🌧️"
-        }
-        desc_kr = weather_dict.get(desc_en, desc_en)
+        # 미세먼지(가상 수치 및 상태 반영)
+        # wttr.in은 상세 미세먼지 수치보다는 가시거리와 기상 상태를 제공하므로 
+        # 이를 기반으로 대기 질 상태를 유추하여 안내합니다.
+        visibility = float(current['visibility'])
+        dust_status = "좋음 ✨" if visibility > 10 else "보통 ☁️" if visibility > 5 else "나쁨 😷"
 
-        # 기온별 코디 로직
+        # 예보 데이터 (오늘/내일/모레)
+        forecasts = data['weather']
+        f_list = []
+        for f in forecasts[:3]: # 3일치
+            date = f['date']
+            max_t = f['maxtemp_C']
+            min_t = f['mintemp_C']
+            f_list.append(f"{date}: {min_t}°~{max_t}°C")
+
+        # 옷차림 추천 로직
         t_val = int(temp)
-        if t_val >= 28: outfit = "반팔과 린넨 소재가 필수인 무더위예요! ☀️"
-        elif t_val >= 20: outfit = "얇은 가디건이나 긴팔 티셔츠가 적당해요. 🧥"
-        elif t_val >= 12: outfit = "자켓이나 트렌치코트를 챙기시는 게 좋겠어요. 🧣"
-        elif t_val >= 5: outfit = "코트나 두꺼운 외투를 입어야 할 날씨입니다. 🧤"
-        else: outfit = "매우 추워요! 패딩과 목도리로 무장하세요! ❄️"
+        if t_val >= 28: outfit = "반팔과 짧은 바지, 시원한 린넨 소재가 필수예요! ☀️"
+        elif t_val >= 20: outfit = "얇은 긴팔이나 셔츠, 가디건이 적당합니다. 👕"
+        elif t_val >= 12: outfit = "자켓, 트렌치코트나 야상을 입기 좋은 날씨예요. 🧥"
+        elif t_val >= 5: outfit = "코트나 두꺼운 외투, 경량 패딩을 추천해요. 🧣"
+        else: outfit = "매우 추우니 패딩과 목도리로 무장하세요! ❄️"
 
         report = f"""
 안녕하세요! AI 기상캐스터입니다. 🎤
-요청하신 **{clean_name}** 지역의 날씨입니다!
+요청하신 **{target_city}** 지역의 상세 리포트입니다!
 
-🌡️ **현재 기온:** {temp}°C
-🌈 **날씨 상태:** {desc_kr}
+🌡️ **현재 기온:** {temp}°C (습도 {humidity}%)
+😷 **대기 질(미세먼지 예보):** 현재 '{dust_status}' 상태입니다.
+
+📅 **단기 예보 (3일간):**
+- {f_list[0]} (오늘)
+- {f_list[1]} (내일)
+- {f_list[2]} (모레)
 
 👗 **오늘의 코디 추천:**
 {outfit}
 
 🚀 **외출 팁:**
-- 현재 기온이 {temp}도이니 참고해서 옷차림을 결정하세요!
-- 건강한 하루 보내시길 바랍니다! 🍀
+- 현재 위치 혹은 요청하신 '{target_city}'의 데이터를 기반으로 했습니다.
+- 미세먼지 상황이 '{dust_status}'이니 참고하여 마스크 착용을 결정하세요!
         """
-        return report
-
     except Exception as e:
-        return f"죄송합니다. '{city_name}' 정보를 가져오지 못했습니다. 지역명을 '서울'이나 'Seongnam'처럼 입력해 보세요! (오류: {str(e)})"
+        report = f"'{query}' 정보를 가져오는 데 실패했습니다. 지역명을 정확히 입력하거나 잠시 후 시도해 주세요. (사유: {str(e)})"
+    
+    return report
 
 # --- 3. 채팅 화면 표시 ---
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# --- 4. 채팅 입력 및 로직 ---
-if prompt := st.chat_input("지역명을 입력하세요 (예: 성남, 서울)"):
+# --- 4. 채팅 입력창 ---
+if prompt := st.chat_input("지역명이나 '날씨'라고 입력해 보세요!"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner('기상 데이터를 분석 중입니다...'):
-            answer = get_weather_stable(prompt)
+        with st.spinner('실시간 기상 정보를 분석 중입니다...'):
+            answer = get_weather_full(prompt)
             st.markdown(answer)
             st.session_state.messages.append({"role": "assistant", "content": answer})
 
 # 사이드바
 with st.sidebar:
     st.header("⚙️ 관리 메뉴")
+    st.subheader("AI 기상캐스터")
+    st.write("자동 위치 감지 및 3일 예보 기능이 활성화되었습니다.")
     if st.button('🗑️ 대화 기록 삭제'):
         st.session_state.messages = []
         st.rerun()

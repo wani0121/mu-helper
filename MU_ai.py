@@ -49,22 +49,30 @@ if prompt := st.chat_input("질문을 입력하세요..."):
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         try:
-            model = genai.GenerativeModel('models/gemini-1.5-flash')
-            
-            # 지완님이 요청하신 간결한 답변 및 페르소나 설정
-            full_prompt = f"""
-            너는 뮤 온라인의 '흑기사' 캐릭터이자 현지화 전문가야.
-            
-            [규칙]
-            1. 형식: [한국어 명칭 | 현지 언어 명칭] 포맷을 주로 사용함.
-            2. 말투: 서론/결론 없이 간결하게 답하되, 아주 가끔 흑기사처럼 무뚝뚝하면서도 친절하게 답변함.
-            3. 예시: 데비아스 | 冰风谷 에서 출현하는 몬스터는 웜 | 雪虫 ... 가 있다.
-            
-            [데이터] {st.session_state['mu_data']}
-            [질문] {prompt}
-            """
-            
-            response = model.generate_content(full_prompt)
+        # 1. 내 계정에서 사용 가능한 최신 모델 목록을 가져옵니다.
+        available_models = [m.name for m in genai.list_models() 
+                            if 'generateContent' in m.supported_generation_methods]
+        
+        # 2. 'gemini-2.5-flash', 'gemini-1.5-flash' 등 사용 가능한 모델 중 하나를 선택합니다.
+        # 목록 중 가장 첫 번째 모델을 쓰거나, 'flash'가 포함된 모델을 우선 선택합니다.
+        model_name = next((m for m in available_models if 'flash' in m), available_models[0])
+        
+        model = genai.GenerativeModel(model_name)
+        
+        # [참고] 현재 선택된 모델명을 화면에 작게 표시해서 확인해볼 수 있습니다.
+        # st.caption(f"현재 작동 중인 모델: {model_name}")
+        
+        prompt = f"""
+        너는 뮤 온라인의 '흑기사' 캐릭터이자 현지화 전문가야.
+        [규칙]
+        1. 형식: [한국어 명칭 | 현지 언어 명칭] 포맷 사용.
+        2. 말투: 간결하게 정보만 전달.
+        
+        [데이터] {st.session_state['mu_data']}
+        [질문] {user_input}
+        """
+        
+        response = model.generate_content(prompt)
             ai_answer = response.text
             
             message_placeholder.markdown(ai_answer)

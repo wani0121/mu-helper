@@ -1,9 +1,3 @@
-지완님, 모델을 수동으로 입력하지 않고 자동으로 사용 가능한 모델을 찾아내어 404 에러를 원천 차단하는 로직을 반영했습니다.
-
-이제 이 코드를 사용하면 구글 API가 업데이트되어 모델 이름이 바뀌더라도 에러 없이 작동할 거예요. 아래 코드를 복사해서 mu_ai.py에 통째로 덮어쓰기 해주세요.
-
-⚔️ 최종 수정된 mu_ai.py (채팅형 + 404 에러 자동 방지)
-Python
 import streamlit as st
 import google.generativeai as genai
 import requests
@@ -28,8 +22,8 @@ def get_official_terms():
         return "데이터 수집 실패"
 
 # --- 3. 페이지 설정 ---
-st.set_page_config(page_title="뮤 온라인 ai 흑기사", page_icon="🔍")
-st.title("🐲 뮤 온라인 물어보세요")
+st.set_page_config(page_title="뮤온라인 ai 흑기사", page_icon="🌐")
+st.title("🐲 뮤온라인 물어보세요")
 
 # 대화 내역 저장 공간
 if "messages" not in st.session_state:
@@ -55,7 +49,7 @@ if prompt := st.chat_input("질문을 입력하세요..."):
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         try:
-            # [404 에러 해결] 내 계정에서 사용 가능한 모델 목록을 가져와 자동 선택
+            # 내 계정에서 사용 가능한 모델 목록을 가져와 자동 선택
             models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
             
             # 'flash' 모델을 우선 찾고, 없으면 목록의 첫 번째 모델 사용

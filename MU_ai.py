@@ -6,10 +6,8 @@ import requests
 api_key = st.secrets.get("GEMINI_API_KEY")
 if api_key:
     genai.configure(api_key=api_key)
-else:
-    st.error("⚠️ Streamlit Secrets에 'GEMINI_API_KEY'가 설정되지 않았습니다!")
 
-# --- 2. 안전한 날씨 데이터 수집 함수 ---
+# --- 2. 안전한 날씨 데이터 수집 함수 (이용량 무제한) ---
 def get_safe_weather(city_name):
     try:
         city_map = {"성남": "Seongnam", "판교": "Pangyo", "서울": "Seoul", "분당": "Bundang"}
@@ -26,9 +24,9 @@ def get_safe_weather(city_name):
         forecast_summary = []
         for w in weather_list[:3]:
             date = w.get('date', '날짜미상')
-            low = w.get('mintemp_C') or w.get('avgtempC') or "??"
-            high = w.get('maxtemp_C') or w.get('avgtempC') or "??"
-            forecast_summary.append(f"{date}: {low}~{high}도")
+            low = w.get('mintemp_C') or "??"
+            high = w.get('maxtemp_C') or "??"
+            forecast_summary.append(f"- {date}: {low}°C ~ {high}°C")
 
         context = {
             "지역": clean_name,
@@ -42,7 +40,7 @@ def get_safe_weather(city_name):
     except Exception as e:
         return None, city_name
 
-# --- 3. UI 및 대화 처리 ---
+# --- 3. UI 설정 ---
 st.set_page_config(page_title="AI 기상캐스터", page_icon="🌤️")
 st.title("🌤️ AI 기상캐스터")
 
@@ -60,48 +58,40 @@ if prompt := st.chat_input("지역명을 입력하세요 (예: 성남 날씨)"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        message_placeholder = st.empty()
         weather_info, city = get_safe_weather(prompt)
         
         if not weather_info:
-            message_placeholder.error("날씨 정보를 불러오지 못했습니다.")
+            st.error("날씨 데이터를 가져올 수 없습니다.")
         else:
-            if not api_key:
-                message_placeholder.warning(f"현재 기온은 {weather_info['현재온도']}도입니다.")
-            else:
+            # 1단계: AI 없이 기본 정보 즉시 출력 (이용량 소모 없음)
+            basic_report = f"""
+### 📍 {city} 날씨 리포트
+- **현재 기온:** {weather_info['현재온도']}°C ({weather_info['날씨상태']})
+- **습도:** {weather_info['습도']}% | **가시거리:** {weather_info['가시거리']}km
+- **단기 예보:**
+{chr(10).join(weather_info['3일예보'])}
+            """
+            st.markdown(basic_report)
+            
+            # 2단계: AI 브리핑 시도 (이용량 남아있을 때만)
+            if api_key:
                 try:
-                    # [핵심 수정] 사용 가능한 모델 리스트에서 직접 매칭
-                    available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-                    # flash 모델이 있으면 쓰고, 없으면 첫 번째 가능한 모델 사용
-                    model_name = next((m for m in available_models if 'flash' in m), available_models[0])
+                    # 가용한 모델 중 가장 안정적인 1.5-flash 우선 시도
+                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    ai_prompt = f"너는 기상캐스터야. 이 데이터를 보고 친절한 코디 추천과 미세먼지 조언을 3줄로 요약해줘: {weather_info}"
                     
-                    model = genai.GenerativeModel(model_name)
-                    
-                    ai_prompt = f"""
-                    너는 전문 AI 기상캐스터야. 아래 정보를 바탕으로 브리핑해줘.
-                    
-                    [데이터]: {weather_info}
-                    
-                    [미션]
-                    - 가시거리가 10km 미만이면 미세먼지 주의 당부.
-                    - 온도에 맞는 구체적인 옷차림 제안.
-                    - 3일 예보를 포함해 상냥하게 답할 것.
-                    """
                     response = model.generate_content(ai_prompt)
-                    ai_answer = response.text
-                    message_placeholder.markdown(ai_answer)
-                    st.session_state.messages.append({"role": "assistant", "content": ai_answer})
+                    st.info(f"🎤 AI 캐스터의 한마디:\n{response.text}")
+                    st.session_state.messages.append({"role": "assistant", "content": basic_report + "\n" + response.text})
                 except Exception as e:
-                    message_placeholder.error(f"모델 연결 실패: {str(e)}\n\n사용 가능 모델: {str(available_models)}")
+                    st.warning("⚠️ 현재 AI 이용량이 많아 기본 정보만 제공합니다. (내일 다시 활성화됩니다)")
+                    st.session_state.messages.append({"role": "assistant", "content": basic_report})
 
 # 사이드바
 with st.sidebar:
     st.header("⚙️ 시스템 상태")
-    if api_key:
-        st.success("✅ AI 연결 준비됨")
-    else:
-        st.error("❌ AI 키 없음")
-    
+    st.info("기본 날씨: wttr.in (무제한)")
+    st.success("AI 엔진: Gemini (일 20회 제한)")
     if st.button('🗑️ 기록 삭제'):
-        st.session_state.messages = []
+        st.session_state.messages.clear()
         st.rerun()

@@ -1,3 +1,9 @@
+지완님, 아주 좋은 아이디어입니다! 사용자가 무작정 기다리지 않게 **"잠깐 기다리면 될지(분당 제한), 내일 와야 할지(일일 제한)"**를 AI가 에러 코드를 분석해서 친절하게 알려주도록 코드를 업그레이드했습니다.
+
+요청하신 대로 **용(🐲) 이모티콘은 모두 돋보기(🔍)**로 교체했고, 에러 메시지를 세분화하여 반영한 전체 코드입니다.
+
+🔍 mu_ai.py 전체 코드 (에러 구분 알림 + 돋보기 테마)
+Python
 import streamlit as st
 import google.generativeai as genai
 import requests
@@ -22,8 +28,8 @@ def get_official_terms():
         return "데이터 수집 실패"
 
 # --- 3. 페이지 설정 ---
-st.set_page_config(page_title="뮤온라인 ai 흑기사", page_icon="🌐")
-st.title("🐲 뮤온라인 물어보세요")
+st.set_page_config(page_title="뮤 온라인 ai 흑기사", page_icon="🔍")
+st.title("🔍 뮤 온라인 물어보세요")
 
 # 대화 내역 저장 공간
 if "messages" not in st.session_state:
@@ -51,8 +57,6 @@ if prompt := st.chat_input("질문을 입력하세요..."):
         try:
             # 내 계정에서 사용 가능한 모델 목록을 가져와 자동 선택
             models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-            
-            # 'flash' 모델을 우선 찾고, 없으면 목록의 첫 번째 모델 사용
             model_name = next((m for m in models if 'flash' in m), models[0])
             model = genai.GenerativeModel(model_name)
             
@@ -72,14 +76,20 @@ if prompt := st.chat_input("질문을 입력하세요..."):
             
             # 최종 답변 출력
             message_placeholder.markdown(ai_answer)
-            
-            # 3. AI 답변 저장
             st.session_state.messages.append({"role": "assistant", "content": ai_answer})
             
         except Exception as e:
-            error_msg = str(e)
+            error_msg = str(e).lower()
+            
+            # [핵심] 에러 메시지에 따라 알림 구분
             if "429" in error_msg:
-                st.error("⚠️ 일일 사용량이 소진되었습니다. 잠시 후 다시 시도해 주세요.")
+                # 429 에러 중 'quota'나 'daily' 문구가 있으면 일일 제한으로 판단
+                if "daily" in error_msg or "quota" in error_msg:
+                    st.error("⚠️ 오늘 사용량이 모두 소진되었습니다. 내일 다시 시도해주세요.")
+                else:
+                    st.error("⚠️ 너무 빠르게 질문하셨습니다. 잠시 후 다시 시도해주세요.")
+            elif "404" in error_msg:
+                st.error("⚠️ 모델을 찾을 수 없습니다. 설정에서 모델명을 확인해주세요.")
             else:
                 st.error(f"오류 발생: {error_msg}")
 

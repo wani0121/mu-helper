@@ -61,23 +61,24 @@ if prompt := st.chat_input("지역명을 입력하세요 (예: 성남 날씨)"):
 
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
-        
         weather_info, city = get_safe_weather(prompt)
         
         if not weather_info:
-            message_placeholder.error("날씨 서버에 접속할 수 없습니다.")
+            message_placeholder.error("날씨 정보를 불러오지 못했습니다.")
         else:
             if not api_key:
                 message_placeholder.warning(f"현재 기온은 {weather_info['현재온도']}도입니다.")
             else:
                 try:
-                    # [핵심 수정] 모델 명칭을 더 호환성 높은 방식으로 변경
-                    # 'gemini-1.5-flash' 대신 사용 가능한 모델을 탐색하거나 기본 명칭 사용
-                    model = genai.GenerativeModel('models/gemini-1.5-flash')
+                    # [핵심 수정] 사용 가능한 모델 리스트에서 직접 매칭
+                    available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+                    # flash 모델이 있으면 쓰고, 없으면 첫 번째 가능한 모델 사용
+                    model_name = next((m for m in available_models if 'flash' in m), available_models[0])
+                    
+                    model = genai.GenerativeModel(model_name)
                     
                     ai_prompt = f"""
                     너는 전문 AI 기상캐스터야. 아래 정보를 바탕으로 브리핑해줘.
-                    정보가 부족하면 아는 지식을 동원해.
                     
                     [데이터]: {weather_info}
                     
@@ -91,14 +92,7 @@ if prompt := st.chat_input("지역명을 입력하세요 (예: 성남 날씨)"):
                     message_placeholder.markdown(ai_answer)
                     st.session_state.messages.append({"role": "assistant", "content": ai_answer})
                 except Exception as e:
-                    # 모델 인식 실패 시 대안 모델로 재시도
-                    try:
-                        model = genai.GenerativeModel('gemini-pro')
-                        response = model.generate_content(ai_prompt)
-                        message_placeholder.markdown(response.text)
-                        st.session_state.messages.append({"role": "assistant", "content": response.text})
-                    except:
-                        message_placeholder.error(f"AI 모델 인식 오류: {str(e)}\n\n사이드바에서 시스템 상태를 확인해주세요.")
+                    message_placeholder.error(f"모델 연결 실패: {str(e)}\n\n사용 가능 모델: {str(available_models)}")
 
 # 사이드바
 with st.sidebar:

@@ -1,6 +1,6 @@
 import streamlit as st
 import requests
-import geocoder
+from bs4 import BeautifulSoup
 from datetime import datetime
 
 # --- 1. 페이지 설정 ---
@@ -10,83 +10,75 @@ st.title("🌤️ AI 기상캐스터")
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 2. 날씨 및 미세먼지 통합 수집 함수 ---
-def get_weather_full(query):
+# --- 2. 데이터 수집 함수 (가장 확실한 네이버 크롤링) ---
+def get_weather_naver(query):
     try:
-        # 지역명 추출 로직
-        clean_query = query.replace("날씨", "").replace("미세먼지", "").replace("어때", "").replace("알려줘", "").strip()
-        
-        if not clean_query or clean_query == "":
-            g = geocoder.ip('me')
-            target_city = g.city if g.city else "Seoul"
+        # 검색어 다듬기 (예: '성남 날씨 알려줘' -> '성남 날씨')
+        if "날씨" not in query and "미세먼지" not in query:
+            search_query = f"{query} 날씨"
         else:
-            target_city = clean_query
+            search_query = query
 
-        # 영문 도시명 매핑 (안정성 확보)
-        city_map = {"성남": "Seongnam", "판교": "Pangyo", "서울": "Seoul", "부산": "Busan"}
-        search_city = city_map.get(target_city, target_city)
+        url = f"https://search.naver.com/search.naver?query={search_query}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
+        }
+        res = requests.get(url, headers=headers, timeout=5)
+        soup = BeautifulSoup(res.text, 'html.parser')
 
-        # wttr.in 호출
-        url = f"https://wttr.in/{search_city}?format=j1"
-        res = requests.get(url, timeout=10)
-        res.raise_for_status()
-        data = res.json()
-
-        # [현재 날씨]
-        current = data.get('current_condition', [{}])[0]
-        temp = current.get('temp_C', '??')
-        humidity = current.get('humidity', '??')
+        # [필독] 네이버 구조에 맞춘 정밀 수집
+        # 1. 현재 온도
+        temp = soup.select_one('.temperature_text strong').get_text(strip=True).replace('현재 온도', '') if soup.select_one('.temperature_text strong') else "정보 없음"
         
-        # [미세먼지 유추 로직] 가시거리와 기상코드로 분석
-        visibility = float(current.get('visibility', 10))
-        if visibility > 15: dust_status = "매우 좋음 ✨"
-        elif visibility > 10: dust_status = "보통 😊"
-        elif visibility > 5: dust_status = "약간 나쁨 ☁️"
-        else: dust_status = "매우 나쁨 😷 (마스크 필수!)"
-
-        # [3일 예보] 에러 방지용 안전한 추출
+        # 2. 날씨 상태 (흐림, 맑음 등)
+        desc = soup.select_one('.before_slash').get_text(strip=True) if soup.select_one('.before_slash') else "정보 없음"
+        
+        # 3. 미세먼지 수치
+        dust_info = soup.select('.today_chart_list .txt')
+        pm10 = dust_info[0].get_text(strip=True) if len(dust_info) > 0 else "보통"
+        pm25 = dust_info[1].get_text(strip=True) if len(dust_info) > 1 else "보통"
+        
+        # 4. 내일/모레 예보 (?? 방지)
+        # 네이버 날씨 하단의 '시간대별/주간' 데이터를 가져옵니다.
+        forecast_items = soup.select('.week_item')
         f_list = []
-        forecast_data = data.get('weather', [])
-        for f in forecast_data[:3]:
-            date = f.get('date', '날짜 미상')
-            max_t = f.get('maxtemp_C', '??')
-            min_t = f.get('mintemp_C', '??')
-            f_list.append(f"- {date}: {min_t}°C ~ {max_t}°C")
-        
-        if not f_list: f_list = ["예보 데이터를 가져올 수 없습니다."]
+        for item in forecast_items[:3]: # 오늘, 내일, 모레
+            day = item.select_one('.day').text.strip()
+            min_t = item.select_one('.lowest').text.replace('최저기온', '').strip()
+            max_t = item.select_one('.highest').text.replace('최고기온', '').strip()
+            f_list.append(f"- {day}: {min_t} / {max_t}")
 
-        # 기온별 옷차림 추천
+        # 기온별 코디 추천 (t_val 추출)
         try:
-            t_val = int(temp)
-            if t_val >= 28: outfit = "땀 흡수가 잘 되는 반팔과 반바지를 입으세요! ☀️"
-            elif t_val >= 20: outfit = "가벼운 긴팔이나 셔츠가 활동하기 좋아요. 👕"
-            elif t_val >= 12: outfit = "자켓이나 야상, 트렌치코트가 필요해요. 🧥"
-            elif t_val >= 5: outfit = "두꺼운 코트나 경량 패딩을 추천합니다. 🧣"
-            else: outfit = "패딩과 방한용품으로 체온을 유지하세요! ❄️"
+            t_val = float("".join(filter(lambda x: x.isdigit() or x == '.', temp)))
+            if t_val >= 28: outfit = "반팔과 시원한 소재가 필수! ☀️"
+            elif t_val >= 20: outfit = "가벼운 가디건이나 긴팔 티셔츠! 👕"
+            elif t_val >= 12: outfit = "자켓이나 트렌치코트를 챙기세요. 🧥"
+            elif t_val >= 5: outfit = "코트나 두꺼운 외투가 필요해요. 🧣"
+            else: outfit = "패딩과 목도리로 무장하세요! ❄️"
         except:
-            outfit = "일교차에 대비해 겉옷을 챙기시길 권장합니다."
+            outfit = "일교차를 고려해 겉옷을 준비하세요."
 
         report = f"""
 안녕하세요! AI 기상캐스터입니다. 🎤
-요청하신 **{target_city}** 지역의 날씨와 미세먼지 예보입니다!
+요청하신 **{query}** 실시간 브리핑입니다!
 
-🌡️ **현재 기온:** {temp}°C (습도 {humidity}%)
-😷 **미세먼지 예보:** 현재 '{dust_status}' 수준입니다.
+🌡️ **현재 기온:** {temp} ({desc})
+😷 **미세먼지:** {pm10} / **초미세먼지:** {pm25}
 
 📅 **단기 예보 (오늘/내일/모레):**
-{chr(10).join(f_list)}
+{chr(10).join(f_list) if f_list else "네이버에서 예보 데이터를 찾는 중입니다..."}
 
 👗 **오늘의 코디 추천:**
 {outfit}
 
 🚀 **외출 팁:**
-- '{target_city}'의 실시간 데이터를 기반으로 구성했습니다.
-- 미세먼지 상황이 '{dust_status}'이니 참고하세요!
+- 현재 하늘은 {desc} 상태입니다.
+- 미세먼지가 '{pm10}' 수준이니 참고해서 이동하세요!
         """
+        return report
     except Exception as e:
-        report = f"'{query}' 정보를 분석하는 중 오류가 발생했습니다. 지역명(예: 성남, 판교)만 입력해 보시겠어요? (사유: {str(e)})"
-    
-    return report
+        return f"날씨 정보를 가져오는 중 오류가 발생했습니다. '성남'이나 '판교 날씨'처럼 다시 입력해 보세요! (사유: {str(e)})"
 
 # --- 3. 채팅 화면 표시 ---
 for message in st.session_state.messages:
@@ -94,22 +86,21 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # --- 4. 채팅 입력창 ---
-if prompt := st.chat_input("지역명이나 '날씨'라고 입력해 보세요!"):
+if prompt := st.chat_input("지역을 입력하세요 (예: 성남 날씨, 판교 미세먼지)"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
         with st.spinner('실시간 기상 데이터를 수집 중입니다...'):
-            answer = get_weather_full(prompt)
+            answer = get_weather_naver(prompt)
             st.markdown(answer)
             st.session_state.messages.append({"role": "assistant", "content": answer})
 
 # 사이드바
 with st.sidebar:
-    st.header("⚙️ 서비스 상태")
-    st.success("데이터 엔진: wttr.in (정상)")
-    st.info("자동 위치 감지 및 미세먼지 분석 기능 포함")
+    st.header("⚙️ 관리 메뉴")
+    st.info("실시간 네이버 날씨 데이터 연동 중")
     if st.button('🗑️ 대화 기록 삭제'):
         st.session_state.messages = []
         st.rerun()

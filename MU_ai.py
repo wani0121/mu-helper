@@ -1,13 +1,3 @@
-지완님, 또 제 설명 글이 코드 파일 안에 섞여 들어갔군요! 정말 죄송합니다.
-
-파이썬 파일(.py)은 오로지 컴퓨터가 읽는 명령어만 들어있어야 합니다. 제가 드린 답변의 서론(요청하신 대로... 코드입니다)까지 복사해서 붙여넣으시면, 컴퓨터는 그 한글과 이모지를 읽지 못해 SyntaxError를 냅니다.
-
-🛠️ 해결 방법 (이것만 복사하세요!)
-GitHub의 MU_ai.py 편집창에 있는 내용을 전부 지우고, 아래 코드 박스 안에 있는 내용만 첫 줄부터 끝까지 복사해서 붙여넣어 주세요.
-
-※ 주의: import streamlit as st가 반드시 1번 줄에 와야 합니다.
-
-Python
 import streamlit as st
 import google.generativeai as genai
 import requests

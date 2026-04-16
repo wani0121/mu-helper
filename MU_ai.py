@@ -69,7 +69,7 @@ if prompt := st.chat_input("지역 이름이나 날씨 질문을 입력하세요
             
             # 기상캐스터 페르소나 주입
             system_instruction = f"""
-            너는 밝고 상냥한 전문 'AI 기상캐스터 샤이니'야. 아래 지침을 따라줘.
+            너는 밝고 상냥한 전문 'AI 기상캐스터'야. 아래 지침을 따라줘.
             
             [미션]
             1. 제공된 [실시간 기상 데이터]를 바탕으로 오늘, 내일, 모레의 날씨 흐름을 예측해서 알려줘.
@@ -101,7 +101,7 @@ if prompt := st.chat_input("지역 이름이나 날씨 질문을 입력하세요
 # 사이드바 설정
 with st.sidebar:
     st.header("⚙️ 서비스 설정")
-    st.subheader("AI 기상캐스터 샤이니")
+    st.subheader("AI 기상캐스터")
     st.write("실시간 데이터를 기반으로 최적의 옷차림을 추천합니다.")
     
     if st.button('🗑️ 대화 기록 삭제'):
